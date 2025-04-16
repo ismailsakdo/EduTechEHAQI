@@ -1,89 +1,111 @@
 #include <Wire.h>
-#include <Adafruit_AHTX0.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <Adafruit_PM25AQI.h>
+#include <Adafruit_AHTX0.h>
+#include <SoftwareSerial.h>
 
-Adafruit_AHTX0 aht;
-
-// OLED display setup
+// ====== OLED Display Setup ======
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-#define OLED_RESET    -1  // Reset pin not used
+#define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// ====== PMS Sensor Setup ======
+SoftwareSerial pmSerial(16, 17); // RX=16 (sensor TX), TX=17 (not used)
+Adafruit_PM25AQI aqi = Adafruit_PM25AQI();
+
+// ====== AHT Sensor Setup ======
+Adafruit_AHTX0 aht;
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Adafruit AHT10/AHT20 demo!");
+  delay(1000);
 
-  // Initialize OLED display
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;); // Don't proceed, loop forever
+  // ===== OLED INIT =====
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 OLED init failed!"));
+    while (true);
   }
-  
-  // Clear the buffer and display startup message
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0,0);
-  display.println("Initializing...");
-  display.display();
-  delay(1000);
 
-  // Initialize AHT sensor
-  if (!aht.begin()) {
-    Serial.println("Could not find AHT? Check wiring");
-    display.clearDisplay();
-    display.setCursor(0,0);
-    display.println("AHT Sensor Error!");
-    display.display();
+  // ===== PMS SENSOR INIT =====
+  pmSerial.begin(9600);
+  if (!aqi.begin_UART(&pmSerial)) {
+    Serial.println("Could not find PM2.5 sensor!");
     while (1) delay(10);
   }
-  
-  Serial.println("AHT10 or AHT20 found");
-  display.clearDisplay();
-  display.println("AHT Sensor Found");
-  display.display();
-  delay(1000);
+  Serial.println("PM2.5 sensor initialized");
+
+  // ===== AHT SENSOR INIT =====
+  if (!aht.begin()) {
+    Serial.println("Could not find AHT sensor! Check wiring.");
+    while (1) delay(10);
+  }
+  Serial.println("AHT10/AHT20 sensor initialized");
 }
 
 void loop() {
+  // ===== Read Temperature and Humidity =====
   sensors_event_t humidity, temp;
-  aht.getEvent(&humidity, &temp); // populate temp and humidity objects with fresh data
-  
-  // Print to serial monitor
-  Serial.print("Temperature: "); Serial.print(temp.temperature); Serial.println(" °C");
-  Serial.print("Humidity: "); Serial.print(humidity.relative_humidity); Serial.println("% rH");
+  aht.getEvent(&humidity, &temp);
 
-  // Display on OLED
+  // ===== Read PM2.5 Data =====
+  PM25_AQI_Data data;
+  bool pm_ok = aqi.read(&data);
+
+  // ===== Serial Output =====
+  Serial.println(F("----------- Sensor Readings -----------"));
+  Serial.print("Temperature: ");
+  Serial.print(temp.temperature, 1);
+  Serial.println(" °C");
+
+  Serial.print("Humidity: ");
+  Serial.print(humidity.relative_humidity, 1);
+  Serial.println(" %");
+
+  if (pm_ok) {
+    Serial.print("PM0.3: ");
+    Serial.println(data.particles_03um);
+
+    Serial.print("PM1.0 (std): ");
+    Serial.print(data.pm10_standard);
+    Serial.print(" | PM2.5 (std): ");
+    Serial.print(data.pm25_standard);
+    Serial.print(" | PM10 (std): ");
+    Serial.println(data.pm100_standard);
+  } else {
+    Serial.println("PM sensor read error!");
+  }
+
+  // ===== OLED Display =====
   display.clearDisplay();
-  
-  // Display temperature
-  display.setTextSize(1);
-  display.setCursor(0,0);
-  display.print("Temperature:");
-  
-  display.setTextSize(2);
-  display.setCursor(0,10);
-  display.print(temp.temperature);
-  display.print(" ");
-  display.setTextSize(1);
-  display.cp437(true);
-  display.write(167); // degree symbol
-  display.setTextSize(2);
-  display.print("C");
+  display.setCursor(0, 0);
 
-  // Display humidity
-  display.setTextSize(1);
-  display.setCursor(0, 35);
-  display.print("Humidity:");
-  
-  display.setTextSize(2);
-  display.setCursor(0,45);
-  display.print(humidity.relative_humidity);
-  display.print(" %");
-  
+  display.print("T:");
+  display.print(temp.temperature, 1);
+  display.print((char)247); // Degree symbol
+  display.print("C H:");
+  display.print(humidity.relative_humidity, 1);
+  display.println("%");
+
+  if (pm_ok) {
+    display.print("PM0.3:");
+    display.println(data.particles_03um);
+
+    display.print("PM1.0:");
+    display.print(data.pm10_standard);
+    display.print(" PM2.5:");
+    display.println(data.pm25_standard);
+
+    display.print("PM10:");
+    display.println(data.pm100_standard);
+  } else {
+    display.println("PM Read Error");
+  }
+
   display.display();
-
-  delay(2000); // Update every 2 seconds
+  delay(1000);
 }
