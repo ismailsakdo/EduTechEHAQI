@@ -5,58 +5,56 @@
 #include <Adafruit_AHTX0.h>
 #include <SoftwareSerial.h>
 
-// ====== OLED Display Setup ======
+// ===== OLED Setup =====
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-// ====== PMS Sensor Setup ======
-SoftwareSerial pmSerial(16, 17); // RX=16 (sensor TX), TX=17 (not used)
+// ===== PM2.5 Sensor Setup =====
+SoftwareSerial pmSerial(16, 17); // RX=16 (from sensor TX), TX=17 (unused)
 Adafruit_PM25AQI aqi = Adafruit_PM25AQI();
 
-// ====== AHT Sensor Setup ======
+// ===== AHT10/20 Sensor Setup =====
 Adafruit_AHTX0 aht;
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  // ===== OLED INIT =====
+  // Initialize OLED
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println(F("SSD1306 OLED init failed!"));
+    Serial.println("OLED init failed!");
     while (true);
   }
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
 
-  // ===== PMS SENSOR INIT =====
+  // Initialize PM2.5 sensor
   pmSerial.begin(9600);
   if (!aqi.begin_UART(&pmSerial)) {
-    Serial.println("Could not find PM2.5 sensor!");
-    while (1) delay(10);
+    Serial.println("PM2.5 sensor not found!");
+    while (true);
   }
   Serial.println("PM2.5 sensor initialized");
 
-  // ===== AHT SENSOR INIT =====
+  // Initialize Temp & Humidity sensor
   if (!aht.begin()) {
-    Serial.println("Could not find AHT sensor! Check wiring.");
-    while (1) delay(10);
+    Serial.println("AHT sensor not found!");
+    while (true);
   }
   Serial.println("AHT10/AHT20 sensor initialized");
 }
 
 void loop() {
-  // ===== Read Temperature and Humidity =====
   sensors_event_t humidity, temp;
   aht.getEvent(&humidity, &temp);
 
-  // ===== Read PM2.5 Data =====
   PM25_AQI_Data data;
   bool pm_ok = aqi.read(&data);
 
-  // ===== Serial Output =====
+  // ==== Serial Output ====
   Serial.println(F("----------- Sensor Readings -----------"));
   Serial.print("Temperature: ");
   Serial.print(temp.temperature, 1);
@@ -64,46 +62,65 @@ void loop() {
 
   Serial.print("Humidity: ");
   Serial.print(humidity.relative_humidity, 1);
-  Serial.println(" %");
+  Serial.println(" %RH");
 
   if (pm_ok) {
     Serial.print("PM0.3: ");
-    Serial.println(data.particles_03um);
+    Serial.print(data.particles_03um);
+    Serial.println(" particles/0.1L");
 
-    Serial.print("PM1.0 (std): ");
+    Serial.print("PM1.0: ");
     Serial.print(data.pm10_standard);
-    Serial.print(" | PM2.5 (std): ");
+    Serial.println(" µg/m³");
+
+    Serial.print("PM2.5: ");
     Serial.print(data.pm25_standard);
-    Serial.print(" | PM10 (std): ");
-    Serial.println(data.pm100_standard);
+    Serial.println(" µg/m³");
+
+    Serial.print("PM10 : ");
+    Serial.print(data.pm100_standard);
+    Serial.println(" µg/m³");
   } else {
     Serial.println("PM sensor read error!");
   }
 
-  // ===== OLED Display =====
+  // ==== OLED Display ====
   display.clearDisplay();
   display.setCursor(0, 0);
 
-  display.print("T:");
+  display.print("Temp: ");
   display.print(temp.temperature, 1);
-  display.print((char)247); // Degree symbol
-  display.print("C H:");
+  display.println((char)247); // ° symbol
+  display.print("C");
+
+  display.setCursor(0, 10);
+  display.print("Humidity: ");
   display.print(humidity.relative_humidity, 1);
-  display.println("%");
+  display.println(" %");
 
   if (pm_ok) {
-    display.print("PM0.3:");
-    display.println(data.particles_03um);
+    display.setCursor(0, 20);
+    display.print("PM0.3: ");
+    display.print(data.particles_03um);
+    display.println(" #/0.1L");
 
-    display.print("PM1.0:");
+    display.setCursor(0, 30);
+    display.print("PM1.0: ");
     display.print(data.pm10_standard);
-    display.print(" PM2.5:");
-    display.println(data.pm25_standard);
+    display.println(" ug/m3");
 
-    display.print("PM10:");
-    display.println(data.pm100_standard);
+    display.setCursor(0, 40);
+    display.print("PM2.5: ");
+    display.print(data.pm25_standard);
+    display.println(" ug/m3");
+
+    display.setCursor(0, 50);
+    display.print("PM10 : ");
+    display.print(data.pm100_standard);
+    display.println(" ug/m3");
   } else {
-    display.println("PM Read Error");
+    display.setCursor(0, 20);
+    display.println("PM read error");
   }
 
   display.display();
