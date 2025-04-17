@@ -15,7 +15,7 @@
 #define WIFI_PASSWORD "password"
 
 // Google Form POST URL
-#define FORM_URL "https://docs.google.com/forms/d/e/Your_Link/formResponse?sp=pp_url&"
+#define FORM_URL "https://docs.google.com/forms/d/e/Your_Link/formResponse?usp=pp_url&"
 
 // OLED configuration
 #define SCREEN_WIDTH 128
